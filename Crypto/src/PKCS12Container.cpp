@@ -53,11 +53,12 @@ PKCS12Container::PKCS12Container(std::istream& istr, const std::string& password
 
 PKCS12Container::PKCS12Container(const std::string& path, const std::string& password): _pKey(0)
 {
-	FILE* pFile = fopen(path.c_str(), "rb");
-	if (pFile)
+	// Use BIO_new_file instead of deprecated d2i_PKCS12_fp for OpenSSL 3.0 compatibility
+	BIO* bio = BIO_new_file(path.c_str(), "rb");
+	if (bio)
 	{
-		PKCS12* pPKCS12 = d2i_PKCS12_fp(pFile, NULL);
-		fclose (pFile);
+		PKCS12* pPKCS12 = d2i_PKCS12_bio(bio, NULL);
+		BIO_free(bio);
 		if (!pPKCS12) throw OpenSSLException("PKCS12Container(const string&, const string&)");
 		load(pPKCS12, password);
 	}

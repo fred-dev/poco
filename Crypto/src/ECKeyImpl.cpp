@@ -80,22 +80,47 @@ ECKeyImpl::ECKeyImpl(const std::string& publicKeyFile,
 	const std::string& privateKeyFile,
 	const std::string& privateKeyPassphrase): KeyPairImpl("ec", KT_EC_IMPL), _pEC(0)
 {
-	if (EVPPKey::loadKey(&_pEC, PEM_read_PrivateKey, EVP_PKEY_get1_EC_KEY, privateKeyFile, privateKeyPassphrase))
+	// Use BIO-based functions for OpenSSL 3.0 compatibility
+	BIO* bio = BIO_new_file(privateKeyFile.c_str(), "r");
+	if (bio)
 	{
-		checkEC(Poco::format("ECKeyImpl(%s, %s, %s)",
-			publicKeyFile, privateKeyFile, privateKeyPassphrase.empty() ? privateKeyPassphrase : std::string("***")),
-			"PEM_read_PrivateKey() or EVP_PKEY_get1_EC_KEY()");
-		return; // private key is enough
+		EVP_PKEY* pKey = PEM_read_bio_PrivateKey(bio, NULL, NULL, (void*)privateKeyPassphrase.c_str());
+		BIO_free(bio);
+		if (pKey)
+		{
+			_pEC = EVP_PKEY_get1_EC_KEY(pKey);
+			EVP_PKEY_free(pKey);
+			if (_pEC)
+			{
+				checkEC(Poco::format("ECKeyImpl(%s, %s, %s)",
+					publicKeyFile, privateKeyFile, privateKeyPassphrase.empty() ? privateKeyPassphrase : std::string("***")),
+					"PEM_read_bio_PrivateKey() or EVP_PKEY_get1_EC_KEY()");
+				return; // private key is enough
+			}
+		}
 	}
 
 	// no private key, this must be public key only, otherwise throw
-	if (!EVPPKey::loadKey(&_pEC, PEM_read_PUBKEY, EVP_PKEY_get1_EC_KEY, publicKeyFile))
+	bio = BIO_new_file(publicKeyFile.c_str(), "r");
+	if (bio)
 	{
-		throw OpenSSLException("ECKeyImpl(const string&, const string&, const string&");
+		EVP_PKEY* pKey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+		BIO_free(bio);
+		if (pKey)
+		{
+			_pEC = EVP_PKEY_get1_EC_KEY(pKey);
+			EVP_PKEY_free(pKey);
+			if (_pEC)
+			{
+				checkEC(Poco::format("ECKeyImpl(%s, %s, %s)",
+					publicKeyFile, privateKeyFile, privateKeyPassphrase.empty() ? privateKeyPassphrase : std::string("***")),
+					"PEM_read_bio_PUBKEY() or EVP_PKEY_get1_EC_KEY()");
+				return;
+			}
+		}
 	}
-	checkEC(Poco::format("ECKeyImpl(%s, %s, %s)",
-		publicKeyFile, privateKeyFile, privateKeyPassphrase.empty() ? privateKeyPassphrase : std::string("***")),
-		"PEM_read_PUBKEY() or EVP_PKEY_get1_EC_KEY()");
+	
+	throw OpenSSLException("ECKeyImpl(const string&, const string&, const string&");
 }
 
 

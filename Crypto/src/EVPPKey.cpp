@@ -248,20 +248,39 @@ EVPPKey::EVPPKey(const std::string& publicKeyFile,
 	const std::string& privateKeyFile,
 	const std::string& privateKeyPassphrase): _pEVPPKey(0)
 {
-	if (loadKey(&_pEVPPKey, PEM_read_PrivateKey, (EVP_PKEY_get_Key_fn)0, privateKeyFile, privateKeyPassphrase))
+	// Use BIO_new_file for OpenSSL 3.0 compatibility
+	BIO* bio = BIO_new_file(privateKeyFile.c_str(), "r");
+	if (bio)
 	{
-		poco_check_ptr(_pEVPPKey);
-		return; // private key is enough
+		_pEVPPKey = PEM_read_bio_PrivateKey(bio, NULL, NULL, (void*)privateKeyPassphrase.c_str());
+		BIO_free(bio);
+		if (_pEVPPKey)
+		{
+			poco_check_ptr(_pEVPPKey);
+			checkType();
+			return; // private key is enough
+		}
 	}
 
 	// no private key, this must be public key only, otherwise throw
-	if (!loadKey(&_pEVPPKey, PEM_read_PUBKEY, (EVP_PKEY_get_Key_fn)0, publicKeyFile))
+	bio = BIO_new_file(publicKeyFile.c_str(), "r");
+	if (bio)
+	{
+		_pEVPPKey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+		BIO_free(bio);
+		if (!_pEVPPKey)
+		{
+			std::string msg = "EVPPKey(const string&, const string&, const string&)\n";
+			throw OpenSSLException(getError(msg));
+		}
+		poco_check_ptr(_pEVPPKey);
+		checkType();
+	}
+	else
 	{
 		std::string msg = "EVPPKey(const string&, const string&, const string&)\n";
 		throw OpenSSLException(getError(msg));
 	}
-	poco_check_ptr(_pEVPPKey);
-	checkType();
 }
 
 

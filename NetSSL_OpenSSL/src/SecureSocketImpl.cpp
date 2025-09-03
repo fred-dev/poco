@@ -82,7 +82,8 @@ void SecureSocketImpl::acceptSSL()
 
 	LockT l(_mutex);
 
-	BIO* pBIO = ::BIO_new(BIO_s_socket());
+	// Use BIO_new with BIO_s_fd for OpenSSL 3.0 compatibility
+	BIO* pBIO = ::BIO_new(BIO_s_fd());
 	if (!pBIO) throw SSLException("Cannot create BIO object");
 	BIO_set_fd(pBIO, static_cast<int>(_pSocket->sockfd()), BIO_NOCLOSE);
 
@@ -160,7 +161,8 @@ void SecureSocketImpl::connectSSL(bool performHandshake)
 
 	LockT l(_mutex);
 
-	::BIO* pBIO = ::BIO_new(BIO_s_socket());
+	// Use BIO_new with BIO_s_fd for OpenSSL 3.0 compatibility
+	::BIO* pBIO = ::BIO_new(BIO_s_fd());
 	if (!pBIO) throw SSLException("Cannot create SSL BIO object");
 	BIO_set_fd(pBIO, static_cast<int>(_pSocket->sockfd()), BIO_NOCLOSE);
 

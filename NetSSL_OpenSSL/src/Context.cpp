@@ -804,14 +804,27 @@ void Context::initDH(KeyDHGroup keyDHGroup, const std::string& dhParamsFile)
 					dhParamsFile, Poco::Error::getMessage(Poco::Error::last())));
 		}
 
-		if (!OSSL_DECODER_from_fp(pOSSLDecodeCtx, pFile))
+		// Use BIO instead of deprecated OSSL_DECODER_from_fp for OpenSSL 3.0 compatibility
+		BIO* bio = BIO_new_file(dhParamsFile.c_str(), "r");
+		if (!bio)
 		{
 			fclose(pFile);
 			OSSL_DECODER_CTX_free(pOSSLDecodeCtx);
 			std::string err = Poco::format(
-					"Context::initDH(%s):OSSL_DECODER_from_fp()\n%s", dhParamsFile);
+					"Context::initDH(%s):BIO_new_file()\n%s", dhParamsFile);
 			throw Poco::Crypto::OpenSSLException(Poco::Crypto::getError(err));
 		}
+		
+		if (!OSSL_DECODER_from_bio(pOSSLDecodeCtx, bio))
+		{
+			BIO_free(bio);
+			fclose(pFile);
+			OSSL_DECODER_CTX_free(pOSSLDecodeCtx);
+			std::string err = Poco::format(
+					"Context::initDH(%s):OSSL_DECODER_from_bio()\n%s", dhParamsFile);
+			throw Poco::Crypto::OpenSSLException(Poco::Crypto::getError(err));
+		}
+		BIO_free(bio);
 		fclose(pFile);
 		OSSL_DECODER_CTX_free(pOSSLDecodeCtx);
 
@@ -1051,3 +1064,4 @@ void Context::initECDH(const std::string& curve)
 
 
 } } // namespace Poco::Net
+
